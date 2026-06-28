@@ -148,6 +148,11 @@
   .pg-biens-row:last-child { border-bottom: none; }
   .pg-biens-row:hover { background: #F8FBF5; }
   .pg-biens-row-name { font-size: 14px; font-weight: 700; color: #1C2418; flex: 1; min-width: 0; }
+  .pg-recherche-meta { font-size: 11.5px; color: #6B8A57; margin-top: 4px; }
+  .pg-search-row { display: flex; align-items: center; gap: 8px; padding: 12px 16px; border-bottom: 1px solid #F0F4EC; }
+  .pg-search-row .pg-input { flex: 1; }
+  .pg-biens-row-name-col { display: flex; flex-direction: column; gap: 2px; flex: 1; min-width: 0; }
+  .pg-biens-row-broker { display: flex; align-items: center; gap: 4px; font-size: 11.5px; color: #6B8A57; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .pg-biens-row-right { display: flex; align-items: center; gap: 10px; flex-shrink: 0; }
   .pg-biens-row-price { font-size: 13.5px; font-weight: 700; color: #2E5C16; white-space: nowrap; }
   .pg-chevron { color: #9DB28F; flex-shrink: 0; }
@@ -425,7 +430,7 @@ async function saveData(data) {
   if (error) { console.error("Erreur sauvegarde:", error); return false; }
   return true;
 }
-function defaultData() { return { biens: [], investisseurs: [], vendeurs: [] }; }
+function defaultData() { return { biens: [], investisseurs: [], vendeurs: [], recherches: [] }; }
 
 // ---------- Icons (minimal inline SVG, no external icon lib needed) ----------
 const Icon = ({ d, size = 14, ...props }) => (
@@ -441,6 +446,7 @@ const IconTrash = (p) => <Icon d="M3 6h18M8 6V4a2 2 0 012-2h4a2 2 0 012 2v2m3 0l
 const IconUser = (p) => <Icon d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2M12 11a4 4 0 100-8 4 4 0 000 8z" {...p} />;
 const IconBuilding = (p) => <Icon d="M3 21h18M5 21V7l8-4v18M19 21V11l-6-4M9 9v.01M9 12v.01M9 15v.01M9 18v.01" {...p} />;
 const IconLink = (p) => <Icon d="M10 13a5 5 0 007.07 0l2.83-2.83a5 5 0 00-7.07-7.07L11 5M14 11a5 5 0 00-7.07 0L4.1 13.83a5 5 0 007.07 7.07L13 19" {...p} />;
+const IconSearch = (p) => <Icon d="M11 19a8 8 0 100-16 8 8 0 000 16zM21 21l-4.35-4.35" {...p} />;
 
 // ---------- Atoms ----------
 function Field({ label, children, hint }) {
@@ -643,10 +649,22 @@ function BienDetail({ bien, allInvestisseurs, allVendeurs, onUpdate, onBack }) {
   );
 }
 
-function BienRowCompact({ bien, onOpen, onDelete }) {
+function BienRowCompact({ bien, allVendeurs, onOpen, onDelete }) {
+  const vendeurNoms = (bien.vendeurs || [])
+    .map((v) => (allVendeurs || []).find((c) => c.id === v.contactId))
+    .filter(Boolean)
+    .map((c) => c.nom || "(sans nom)");
   return (
     <div className="pg-biens-row" onClick={onOpen}>
-      <div className="pg-biens-row-name">{bien.nom || "Sans nom"}</div>
+      <div className="pg-biens-row-name-col">
+        <div className="pg-biens-row-name">{bien.nom || "Sans nom"}</div>
+        {vendeurNoms.length > 0 && (
+          <div className="pg-biens-row-broker">
+            <IconBuilding size={11} style={{ flexShrink: 0 }} />
+            <span>{vendeurNoms.join(", ")}</span>
+          </div>
+        )}
+      </div>
       <div className="pg-biens-row-right">
         <span className="pg-biens-row-price">{fmtMoney(bien.prixDemande)}</span>
         <Badge statut={bien.statutGlobal} />
@@ -687,9 +705,35 @@ function ContactCard({ contact, onUpdate, onDelete, kind }) {
   );
 }
 
+function RechercheCard({ recherche, allContacts, onUpdate, onDelete }) {
+  const contact = allContacts.find((c) => c.id === recherche.contactId);
+  return (
+    <div className="pg-contact-card">
+      <div className="pg-contact-card-top">
+        <select className="pg-input pg-contact-name-input" value={recherche.contactId || ""} onChange={(e) => onUpdate({ ...recherche, contactId: e.target.value })}>
+          <option value="">— Qui recherche ? —</option>
+          {allContacts.map((c) => <option key={c.id} value={c.id}>{c.nom || "(sans nom)"}</option>)}
+        </select>
+        <IconBtn title="Supprimer" danger onClick={() => onDelete(recherche.id)}><IconTrash size={15} /></IconBtn>
+      </div>
+      <div className="pg-contact-card-grid">
+        <Field label="Type de bien recherché"><input className="pg-input" value={recherche.typeBien} onChange={(e) => onUpdate({ ...recherche, typeBien: e.target.value })} placeholder="ex: Hôtel, Immeuble, Parking…" /></Field>
+        <Field label="Zone géographique"><input className="pg-input" value={recherche.zoneGeo} onChange={(e) => onUpdate({ ...recherche, zoneGeo: e.target.value })} placeholder="ex: Espagne - Alicante, Barcelone" /></Field>
+        <Field label="Budget min (€)"><input type="number" className="pg-input" value={recherche.budgetMin} onChange={(e) => onUpdate({ ...recherche, budgetMin: e.target.value })} /></Field>
+        <Field label="Budget max (€)"><input type="number" className="pg-input" value={recherche.budgetMax} onChange={(e) => onUpdate({ ...recherche, budgetMax: e.target.value })} /></Field>
+      </div>
+      <Field label="Détails">
+        <textarea className="pg-textarea" value={recherche.details} onChange={(e) => onUpdate({ ...recherche, details: e.target.value })} rows={2} />
+      </Field>
+      {contact && <div className="pg-recherche-meta">Société : {contact.societe || "—"}</div>}
+    </div>
+  );
+}
+
 function App() {
   const [data, setData] = useState(null);
   const [tab, setTab] = useState("biens");
+  const [rechercheQuery, setRechercheQuery] = useState("");
   const [openBienId, setOpenBienId] = useState(null);
   const [loading, setLoading] = useState(true);
   const [saveState, setSaveState] = useState("idle");
@@ -698,7 +742,11 @@ function App() {
     let mounted = true;
     (async () => {
       const loaded = await loadData();
-      if (mounted) { setData(loaded || defaultData()); setLoading(false); }
+      if (mounted) {
+        const loadedSafe = loaded ? { ...loaded, recherches: loaded.recherches || [] } : defaultData();
+        setData(loadedSafe);
+        setLoading(false);
+      }
     })();
     return () => { mounted = false; };
   }, []);
@@ -708,7 +756,8 @@ function App() {
     const interval = setInterval(async () => {
       const fresh = await loadData();
       if (fresh) {
-        setData((prev) => JSON.stringify(prev) !== JSON.stringify(fresh) ? fresh : prev);
+        const freshSafe = { ...fresh, recherches: fresh.recherches || [] };
+        setData((prev) => JSON.stringify(prev) !== JSON.stringify(freshSafe) ? freshSafe : prev);
       }
     }, 4000);
     return () => clearInterval(interval);
@@ -753,6 +802,21 @@ function App() {
     if (kind === "investisseur") persist({ ...data, investisseurs: data.investisseurs.filter((x) => x.id !== id) });
     else persist({ ...data, vendeurs: data.vendeurs.filter((x) => x.id !== id) });
   };
+  const addRecherche = () => {
+    const nr = { id: uid(), contactId: "", typeBien: "", zoneGeo: "", budgetMin: "", budgetMax: "", details: "", dateCreation: todayISO() };
+    persist({ ...data, recherches: [nr, ...(data.recherches || [])] });
+  };
+  const updateRecherche = (r) => persist({ ...data, recherches: data.recherches.map((x) => x.id === r.id ? r : x) });
+  const deleteRecherche = (id) => persist({ ...data, recherches: data.recherches.filter((x) => x.id !== id) });
+
+  const allContactsForRecherches = [...data.vendeurs, ...data.investisseurs];
+  const filteredRecherches = (data.recherches || []).filter((r) => {
+    if (!rechercheQuery.trim()) return true;
+    const q = rechercheQuery.trim().toLowerCase();
+    const contact = allContactsForRecherches.find((c) => c.id === r.contactId);
+    const haystack = [r.typeBien, r.zoneGeo, r.details, contact ? contact.nom : ""].join(" ").toLowerCase();
+    return haystack.includes(q);
+  });
 
   const openBien = data.biens.find((b) => b.id === openBienId);
 
@@ -769,6 +833,7 @@ function App() {
           {!openBien && tab === "biens" && <button className="pg-btn-primary" onClick={addBien}><IconPlus size={16} /> Nouveau bien</button>}
           {!openBien && tab === "vendeurs" && <button className="pg-btn-primary" onClick={() => addContact("vendeur")}><IconPlus size={16} /> Nouveau contact</button>}
           {!openBien && tab === "investisseurs" && <button className="pg-btn-primary" onClick={() => addContact("investisseur")}><IconPlus size={16} /> Nouveau contact</button>}
+          {!openBien && tab === "recherches" && <button className="pg-btn-primary" onClick={addRecherche}><IconPlus size={16} /> Nouvelle recherche</button>}
         </div>
       </header>
 
@@ -778,11 +843,13 @@ function App() {
             <button className={"pg-tab" + (tab === "biens" ? " active" : "")} onClick={() => setTab("biens")}><IconBuilding size={14} /> Biens</button>
             <button className={"pg-tab" + (tab === "vendeurs" ? " active" : "")} onClick={() => setTab("vendeurs")}>Broker-Vendeur</button>
             <button className={"pg-tab" + (tab === "investisseurs" ? " active" : "")} onClick={() => setTab("investisseurs")}>Broker-Investisseur</button>
+            <button className={"pg-tab" + (tab === "recherches" ? " active" : "")} onClick={() => setTab("recherches")}><IconSearch size={14} /> Recherches</button>
           </nav>
           <h1 className="pg-title">
             {tab === "biens" && "Pipeline PG Immobilier"}
             {tab === "vendeurs" && "Broker-Vendeur"}
             {tab === "investisseurs" && "Broker-Investisseur"}
+            {tab === "recherches" && "Recherches"}
           </h1>
         </React.Fragment>
       )}
@@ -796,7 +863,7 @@ function App() {
               <React.Fragment>
                 {data.biens.length === 0 && <div className="pg-empty-state">Aucun bien suivi. Ajoute ton premier bien pour démarrer le pipeline.</div>}
                 <div className="pg-biens-list">
-                  {data.biens.map((b) => <BienRowCompact key={b.id} bien={b} onOpen={() => setOpenBienId(b.id)} onDelete={deleteBien} />)}
+                  {data.biens.map((b) => <BienRowCompact key={b.id} bien={b} allVendeurs={data.vendeurs} onOpen={() => setOpenBienId(b.id)} onDelete={deleteBien} />)}
                 </div>
               </React.Fragment>
             )}
@@ -813,6 +880,18 @@ function App() {
                 {data.investisseurs.length === 0 && <div className="pg-empty-state">Aucun contact en base.</div>}
                 <div className="pg-contact-grid">
                   {data.investisseurs.map((c) => <ContactCard key={c.id} contact={c} kind="investisseur" onUpdate={(nc) => updateContact("investisseur", nc)} onDelete={(id) => deleteContact("investisseur", id)} />)}
+                </div>
+              </React.Fragment>
+            )}
+            {tab === "recherches" && (
+              <React.Fragment>
+                <div className="pg-search-row">
+                  <IconSearch size={14} style={{ color: "#6B8A57", flexShrink: 0 }} />
+                  <input className="pg-input" value={rechercheQuery} onChange={(e) => setRechercheQuery(e.target.value)} placeholder="Chercher par zone, type de bien ou contact… ex: Alicante" />
+                </div>
+                {filteredRecherches.length === 0 && <div className="pg-empty-state">{(data.recherches || []).length === 0 ? "Aucune recherche enregistrée." : "Aucun résultat pour cette recherche."}</div>}
+                <div className="pg-contact-grid">
+                  {filteredRecherches.map((r) => <RechercheCard key={r.id} recherche={r} allContacts={allContactsForRecherches} onUpdate={updateRecherche} onDelete={deleteRecherche} />)}
                 </div>
               </React.Fragment>
             )}
